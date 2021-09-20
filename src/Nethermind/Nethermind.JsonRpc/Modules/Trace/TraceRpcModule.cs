@@ -213,7 +213,6 @@ namespace Nethermind.JsonRpc.Modules.Trace
                     ParityTxTraceFromStore tr = traceTransaction.Data[positions[i]+1];
                     traces.Add(tr);
                 }
-
             }
             
             return ResultWrapper<ParityTxTraceFromStore[]>.Success(traces.ToArray());

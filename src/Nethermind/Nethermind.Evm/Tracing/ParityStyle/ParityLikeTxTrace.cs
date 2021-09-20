@@ -36,8 +36,6 @@ namespace Nethermind.Evm.Tracing.ParityStyle
         
         public ParityTraceAction? Action { get; set; }
         
-        public string? Error { get; set; }
-
         public Dictionary<Address, ParityAccountStateChange>? StateChanges { get; set; }
     }
 }
