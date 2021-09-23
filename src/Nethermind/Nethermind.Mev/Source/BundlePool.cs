@@ -53,8 +53,8 @@ namespace Nethermind.Mev.Source
         
         private long HeadNumber => _blockTree.Head?.Number ?? 0;
         
-        public event EventHandler<BundleEventArgs>? NewReceivedBundle;
-        public event EventHandler<BundleEventArgs>? NewPendingBundle;
+        public event EventHandler<BundleEventArgs>? NewReceived;
+        public event EventHandler<BundleEventArgs>? NewPending;
         
         public BundlePool(
             IBlockTree blockTree, 
@@ -138,7 +138,7 @@ namespace Nethermind.Mev.Source
         {
             Metrics.BundlesReceived++;
             BundleEventArgs bundleEventArgs = new(bundle);
-            NewReceivedBundle?.Invoke(this, bundleEventArgs);
+            NewReceived?.Invoke(this, bundleEventArgs);
             
             if (ValidateBundle(bundle))
             {
@@ -147,7 +147,7 @@ namespace Nethermind.Mev.Source
                 if (result)
                 {
                     Metrics.ValidBundlesReceived++;
-                    NewPendingBundle?.Invoke(this, bundleEventArgs);
+                    NewPending?.Invoke(this, bundleEventArgs);
                     if (bundle.BlockNumber == HeadNumber + 1)
                     { 
                         TrySimulateBundle(bundle);
@@ -164,7 +164,7 @@ namespace Nethermind.Mev.Source
         {
             Metrics.MegabundlesReceived++;
             BundleEventArgs bundleEventArgs = new(megabundle, megabundle.RelaySignature);
-            NewReceivedBundle?.Invoke(this, bundleEventArgs);
+            NewReceived?.Invoke(this, bundleEventArgs);
 
             if (ValidateBundle(megabundle))
             {
@@ -172,7 +172,7 @@ namespace Nethermind.Mev.Source
                 if (IsTrustedRelay(relayAddress))
                 {
                     Metrics.ValidMegabundlesReceived++;
-                    NewPendingBundle?.Invoke(this, bundleEventArgs);
+                    NewPending?.Invoke(this, bundleEventArgs);
                     
                     _megabundles.AddOrUpdate(relayAddress, 
                         _ => megabundle, 
