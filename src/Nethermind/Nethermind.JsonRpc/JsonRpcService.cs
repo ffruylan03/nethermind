@@ -20,10 +20,12 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Microsoft.VisualBasic;
 using Nethermind.Core;
 using Nethermind.Core.Attributes;
 using Nethermind.JsonRpc.Data;
 using Nethermind.JsonRpc.Modules;
+using Nethermind.JsonRpc.Modules.Trace;
 using Nethermind.Logging;
 using Nethermind.Serialization.Json;
 using Nethermind.Synchronization.BeamSync;
@@ -118,11 +120,41 @@ namespace Nethermind.JsonRpc
             (MethodInfo Info, bool ReadOnly) method, JsonRpcContext context)
         {
             ParameterInfo[] expectedParameters = method.Info.GetParameters();
-            string[] providedParameters = request.Params ?? Array.Empty<string>();
+            
+            Type paramTypeHelp = expectedParameters[0].ParameterType;
+
+            string[] providedParametersSt = request.Params ?? Array.Empty<string>();
+            string[] subs = providedParametersSt[0].Split("],[");
+            int subsLen = subs.Length;
+            string s0 = subs[0];
+            string s = subs[0].Substring(2);
+            string sn = subs[subsLen - 1];
+            string s_last = sn.Substring(0, sn.Length - 2);
+
+            subs[0] = s;
+            subs[subsLen - 1] = s_last;
+
+            string[] providedParameters = new string[subsLen + 1];
+            for (int i = 0; i < subsLen; ++i)
+            {
+                providedParameters[i] = subs[i];
+            }
+
+            providedParameters[subsLen] = providedParametersSt[1];
+                           
             if (_logger.IsInfo) _logger.Info($"Executing JSON RPC call {methodName} with params [{string.Join(',', providedParameters)}]");
+       
+            
+            // int missingParamsCount = expectedParameters.Length - providedParameters.Length + (providedParameters.Count(string.IsNullOrWhiteSpace));
 
-            int missingParamsCount = expectedParameters.Length - providedParameters.Length + (providedParameters.Count(string.IsNullOrWhiteSpace));
+            int expLen = subsLen + 1;
+            int missingParamsCount = expLen - providedParameters.Length + (providedParameters.Count(string.IsNullOrWhiteSpace));
 
+            
+            // int missingParamsCount = expectedParameters.Length - providedParameters.Length + (providedParameters.Count(string.IsNullOrWhiteSpace));
+            
+            
+            
             if (missingParamsCount != 0)
             {
                 bool hasIncorrectParameters = true;
@@ -144,18 +176,38 @@ namespace Nethermind.JsonRpc
                     return GetErrorResponse(methodName, ErrorCodes.InvalidParams, "Invalid params", $"Incorrect parameters count, expected: {expectedParameters.Length}, actual: {expectedParameters.Length - missingParamsCount}", request.Id);
                 }
             }
-
+            //OPAKOWAC W PETLE KTORA ZWROCI Liste OBIEKTOW 
             //prepare parameters
-            object[]? parameters = null;
-            if (expectedParameters.Length > 0)
+            // if (methodName == "trace_callMany")
+            // {
+            //     List<object[]?> parametersList = null;
+            // }
+
+            List<string[]> manyParams = new List<string[]>();
+            string numberOrTag = providedParameters[providedParameters.Length - 1];
+            for (int i = 0; i < providedParameters.Length - 1; ++i)
             {
-                parameters = DeserializeParameters(expectedParameters, providedParameters, missingParamsCount);
-                if (parameters == null)
-                {
-                    if (_logger.IsWarn) _logger.Warn($"Incorrect JSON RPC parameters when calling {methodName} with params [{string.Join(", ", providedParameters)}]");
-                    return GetErrorResponse(methodName, ErrorCodes.InvalidParams, "Invalid params", null, request.Id);
-                }
+                manyParams.Add(new string[]{providedParameters[i], numberOrTag});
             }
+
+            List<object[]> output = new List<object[]>();
+
+            foreach (var provParams in manyParams)
+            {
+                object[]? temp1 = null;
+                if (expectedParameters.Length > 0)
+                {
+                    temp1 = DeserializeParameters(expectedParameters, provParams, missingParamsCount, methodName);
+                    if (temp1 == null)
+                    {
+                        if (_logger.IsWarn) _logger.Warn($"Incorrect JSON RPC parameters when calling {methodName} with params [{string.Join(", ", provParams)}]");
+                        return GetErrorResponse(methodName, ErrorCodes.InvalidParams, "Invalid params", null, request.Id);
+                    }
+                }
+                output.Add(temp1);
+            }
+
+            object[]? parameters = {};
 
             //execute method
             IResultWrapper resultWrapper = null;
@@ -226,16 +278,40 @@ namespace Nethermind.JsonRpc
             return GetSuccessResponse(methodName, resultWrapper.GetData(), request.Id, returnAction);
         }
 
-        private object[]? DeserializeParameters(ParameterInfo[] expectedParameters, string[] providedParameters, int missingParamsCount)
+        private object[]? DeserializeParameters(ParameterInfo[] expectedParameters, string[] providedParameters, int missingParamsCount, string methodName)
         {
             try
             {
                 var executionParameters = new List<object>();
                 for (int i = 0; i < providedParameters.Length; i++)
                 {
-                    string providedParameter = providedParameters[i];
-                    ParameterInfo expectedParameter = expectedParameters[i];
-                    Type paramType = expectedParameter.ParameterType;
+                    Type paramType = null;
+                    string providedParameter = null;
+                    ParameterInfo expectedParameter = null;
+
+                    
+                    if (methodName == "trace_callMany")
+                    {
+                        if (i != providedParameters.Length - 1)
+                        {
+                            expectedParameter = expectedParameters[0];
+                        }
+                        else
+                        {
+                            expectedParameter = expectedParameters[1];
+                        }
+                        
+                        providedParameter = providedParameters[i];
+                        paramType = expectedParameter.ParameterType;
+
+                    }
+                    else
+                    {
+                        providedParameter = providedParameters[i];
+                        expectedParameter = expectedParameters[i];
+                        paramType = expectedParameter.ParameterType;
+                    }
+                    
                     if (paramType.IsByRef)
                     {
                         paramType = paramType.GetElementType();
@@ -243,7 +319,7 @@ namespace Nethermind.JsonRpc
 
                     if (string.IsNullOrWhiteSpace(providedParameter))
                     {
-                        executionParameters.Add(Type.Missing);
+                        //executionParameters.Add(Type.Missing);
                         continue;
                     }
 
@@ -260,12 +336,20 @@ namespace Nethermind.JsonRpc
                     else if (paramType == typeof(string[]))
                     {
                         executionParam = _serializer.Deserialize<string[]>(new JsonTextReader(new StringReader(providedParameter)));
+                    } 
+                    else if(methodName == "trace_callMany" && i != providedParameters.Length - 1)
+                    {
+                        StringReader sr = new StringReader(providedParameter);
+                        JsonTextReader jtr = new JsonTextReader(sr);
+                        executionParam = _serializer.Deserialize(jtr, typeof(TransactionWithTraceTypes));
                     }
                     else
                     {
                         if (providedParameter.StartsWith('[') || providedParameter.StartsWith('{'))
                         {
-                            executionParam = _serializer.Deserialize(new JsonTextReader(new StringReader(providedParameter)), paramType);
+                            StringReader sr = new StringReader(providedParameter);
+                            JsonTextReader jtr = new JsonTextReader(sr);
+                            executionParam = _serializer.Deserialize(jtr, paramType);
                         }
                         else
                         {
@@ -273,7 +357,9 @@ namespace Nethermind.JsonRpc
                         }
                     }
 
+
                     executionParameters.Add(executionParam);
+
                 }
 
                 for (int i = 0; i < missingParamsCount; i++)

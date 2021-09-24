@@ -143,7 +143,7 @@ namespace Nethermind.JsonRpc.Test.Modules
 
             BlockParameter numberOrTag = new BlockParameter(16);
 
-            (TransactionForRpc message, string[] traceTypes)[] a = {(txForRpc, traceTypes), (txForRpc2, traceTypes2)};
+            TransactionWithTraceTypes[] a = {new(txForRpc, traceTypes), new(txForRpc2, traceTypes2)};
             
             ResultWrapper<ParityTxTraceFromReplay[]> tr = context.TraceRpcModule.trace_callMany(a, numberOrTag);
             Assert.AreEqual(2, tr.Data.Length);
@@ -171,6 +171,40 @@ namespace Nethermind.JsonRpc.Test.Modules
             string serialized = RpcTest.TestSerializedRequest(
                 EthModuleFactory.Converters.Union(TraceModuleFactory.Converters).ToList(), context.TraceRpcModule,
                 "trace_filter", request);
+
+            Assert.AreEqual(
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32001,\"message\":\"Block 340 could not be found\"},\"id\":67}",
+                serialized, serialized.Replace("\"", "\\\""));
+        }
+        
+        [Test]
+        public async Task Trace_filter_return_invalid_params()
+        {
+            Context context = new();
+            await context.Build();
+            string request =
+                "[[{\"from\":\"0xfe35e70599578efef562e1f1cdc9ef693b865e9d\",\"to\":\"0x8cf85548ae57a91f8132d0831634c0fcef06e505\",\"gasPrice\":\"0xb25cc5c5c\"},[\"trace\"]],[{\"from\":\"0x2a6ae6f33729384a00b4ffbd25e3f1bf1b9f5b8d\",\"to\":\"0xab736519b5433974059da38da74b8db5376942cd\",\"gasPrice\":\"0xb2b29a6dc\"},[\"trace\"]]]";
+            string request2 = "\"latest\"";
+
+            string serialized = RpcTest.TestSerializedRequest(
+                EthModuleFactory.Converters.Union(TraceModuleFactory.Converters).ToList(), context.TraceRpcModule,
+                "trace_callMany", request,request2);
+
+            Assert.AreEqual(
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32001,\"message\":\"Block 340 could not be found\"},\"id\":67}",
+                serialized, serialized.Replace("\"", "\\\""));
+        }
+        
+        [Test]
+        public async Task Trace_filter_replayTr()
+        {
+            Context context = new();
+            await context.Build();
+            string request = "\"0xd83e221468ee17699e45b2c7b2a58496945998ffbb06ed003e6c654bd4ab3b91\"";
+            string request2 = "[\"trace\"]";
+            string serialized = RpcTest.TestSerializedRequest(
+                EthModuleFactory.Converters.Union(TraceModuleFactory.Converters).ToList(), context.TraceRpcModule,
+                "trace_replayTransaction", request,request2);
 
             Assert.AreEqual(
                 "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32001,\"message\":\"Block 340 could not be found\"},\"id\":67}",
