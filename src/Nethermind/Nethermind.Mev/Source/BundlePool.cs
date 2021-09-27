@@ -173,9 +173,9 @@ namespace Nethermind.Mev.Source
                 {
                     Metrics.ValidMegabundlesReceived++;
                     NewPending?.Invoke(this, bundleEventArgs);
-                    
-                    _megabundles.AddOrUpdate(relayAddress, 
-                        _ => megabundle, 
+
+                    _megabundles.AddOrUpdate(relayAddress,
+                        _ => megabundle,
                         (_, _) =>
                         {
                             RemoveSimulation(megabundle);
@@ -183,11 +183,12 @@ namespace Nethermind.Mev.Source
                         });
 
                     if (megabundle.BlockNumber == HeadNumber + 1)
-                    { 
+                    {
                         TrySimulateBundle(megabundle);
                     }
+
+                    return true;
                 }
-                return true;
             }
 
             return false;
