@@ -82,7 +82,7 @@ namespace Nethermind.Mev.Source
             _bundles = new BundleSortedPool(
                 _mevConfig.BundlePoolSize,
                 comparer,
-                logManager );
+                logManager);
 
             _bundles.Removed += OnBundleRemoved;
             _blockTree.NewHeadBlock += OnNewBlock;
