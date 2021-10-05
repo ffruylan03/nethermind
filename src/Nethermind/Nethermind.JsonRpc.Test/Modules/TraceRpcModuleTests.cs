@@ -442,5 +442,41 @@ namespace Nethermind.JsonRpc.Test.Modules
 
             Assert.DoesNotThrow(() => traceRpcModule.trace_block(searchParameter));
         }
+        
+         [Test]
+        public async Task Trace_call_test()
+        {
+            Context context = new();
+            await context.Build();
+            string request = "{\"from\":\"0xaaaaaaaa8583de65cc752fe3fad5098643244d22\",\"to\":\"0xd6a8d04cb9846759416457e2c593c99390092df6\"}";
+            string request2 = "[\"trace\"]";
+            string request3 = "\"latest\"";
+            string serialized = RpcTest.TestSerializedRequest(
+                EthModuleFactory.Converters.Union(TraceModuleFactory.Converters).ToList(), context.TraceRpcModule,
+                "trace_call", request, request2, request3);
+
+            Assert.AreEqual(
+                "{\"jsonrpc\":\"2.0\",\"result\":{\"output\":\"0x\",\"stateDiff\":null,\"trace\":[{\"action\":{\"callType\":\"call\",\"from\":\"0xaaaaaaaa8583de65cc752fe3fad5098643244d22\",\"gas\":\"0x0\",\"input\":null,\"to\":\"0xd6a8d04cb9846759416457e2c593c99390092df6\",\"value\":\"0x0\"},\"error\":\"gas limit below intrinsic gas\",\"subtraces\":0,\"traceAddress\":null,\"type\":null}],\"vmTrace\":null},\"id\":67}",
+                serialized, serialized.Replace("\"", "\\\""));
+        }
+        
+        
+        [Test]
+        public async Task Trace_call_without_blockParameter_test()
+        {
+            Context context = new();
+            await context.Build();
+            string request = "{\"from\":\"0xaaaaaaaa8583de65cc752fe3fad5098643244d22\",\"to\":\"0xd6a8d04cb9846759416457e2c593c99390092df6\"}";
+            string request2 = "[\"trace\"]";
+            string request3 = "\"\"";
+            string serialized = RpcTest.TestSerializedRequest(
+                EthModuleFactory.Converters.Union(TraceModuleFactory.Converters).ToList(), context.TraceRpcModule,
+                "trace_call", request, request2, request3);
+
+            Assert.AreEqual(
+                "{\"jsonrpc\":\"2.0\",\"result\":{\"output\":\"0x\",\"stateDiff\":null,\"trace\":[{\"action\":{\"callType\":\"call\",\"from\":\"0xaaaaaaaa8583de65cc752fe3fad5098643244d22\",\"gas\":\"0x0\",\"input\":null,\"to\":\"0xd6a8d04cb9846759416457e2c593c99390092df6\",\"value\":\"0x0\"},\"error\":\"gas limit below intrinsic gas\",\"subtraces\":0,\"traceAddress\":null,\"type\":null}],\"vmTrace\":null},\"id\":67}",
+                serialized, serialized.Replace("\"", "\\\""));
+        }
+        
     }
 }
