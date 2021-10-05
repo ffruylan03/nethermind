@@ -62,9 +62,9 @@ namespace Nethermind.JsonRpc.Modules.Trace
         {
             return types.Select(s => (ParityTraceTypes) Enum.Parse(typeof(ParityTraceTypes), s, true)).Aggregate((t1, t2) => t1 | t2);
         }
-        public ResultWrapper<ParityTxTraceFromReplay> trace_call(TransactionForRpc message, string[] traceTypes, BlockParameter blockParameter = null)
+        public ResultWrapper<ParityTxTraceFromReplay> trace_call(TransactionForRpc message, string[] traceTypes, BlockParameter? blockParameter = null)
         {
-            if (blockParameter == null) blockParameter = BlockParameter.Latest;
+            blockParameter ??= BlockParameter.Latest;
             
             Transaction tx = message.ToTransaction();
             return TraceTx(tx, traceTypes, blockParameter);

@@ -118,7 +118,27 @@ namespace Nethermind.JsonRpc
             (MethodInfo Info, bool ReadOnly) method, JsonRpcContext context)
         {
             ParameterInfo[] expectedParameters = method.Info.GetParameters();
-            string[] providedParameters = request.Params ?? Array.Empty<string>();
+            string[] providedParameters = null;
+            if (methodName == "trace_call")
+            {
+                providedParameters = new string[3];
+                int i = 0;
+                foreach (string par in request.Params)
+                {
+                    providedParameters[i] = par;
+                    i++;
+                }
+
+                if (i == 2)
+                {
+                    providedParameters[2] = "\"\"";
+                }
+            }
+            else
+            {
+                providedParameters = request.Params ?? Array.Empty<string>();
+            }
+            
             if (_logger.IsInfo) _logger.Info($"Executing JSON RPC call {methodName} with params [{string.Join(',', providedParameters)}]");
 
             int missingParamsCount = expectedParameters.Length - providedParameters.Length + (providedParameters.Count(string.IsNullOrWhiteSpace));
