@@ -468,7 +468,6 @@ namespace Nethermind.JsonRpc.Test.Modules
             await context.Build();
             string request = "{\"from\":\"0xaaaaaaaa8583de65cc752fe3fad5098643244d22\",\"to\":\"0xd6a8d04cb9846759416457e2c593c99390092df6\"}";
             string request2 = "[\"trace\"]";
-            // string request3 = "\"\"";
             string serialized = RpcTest.TestSerializedRequest(
                 EthModuleFactory.Converters.Union(TraceModuleFactory.Converters).ToList(), context.TraceRpcModule,
                 "trace_call", request, request2);
