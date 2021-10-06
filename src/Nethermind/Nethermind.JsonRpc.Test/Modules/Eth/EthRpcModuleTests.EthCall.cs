@@ -22,6 +22,7 @@ using Nethermind.Core.Crypto;
 using Nethermind.Core.Extensions;
 using Nethermind.Core.Test.Builders;
 using Nethermind.Evm;
+using Nethermind.Int256;
 using Nethermind.JsonRpc.Data;
 using Nethermind.Specs;
 using Nethermind.Specs.Forks;
@@ -51,7 +52,7 @@ namespace Nethermind.JsonRpc.Test.Modules.Eth
                 "{\"gasPrice\":\"0x100000\", \"data\": \"0x70a082310000000000000000000000006c1f09f6271fbe133db38db9c9280307f5d22160\", \"to\": \"0x0d8775f648430679a709e98d2b0cb6250d2887ef\"}");
             string serialized =
                 ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction), "0x0");
-            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"result\":\"0x\",\"id\":67}", serialized);
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,\"message\":\"insufficient funds for transfer: address 0xfffffffffffffffffffffffffffffffffffffffe\"},\"id\":67}", serialized);
             ctx._test.ReadOnlyState.AccountExists(Address.SystemUser).Should().BeFalse();
         }
 
@@ -65,7 +66,7 @@ namespace Nethermind.JsonRpc.Test.Modules.Eth
                 "{\"from\":\"0x0001020304050607080910111213141516171819\",\"gasPrice\":\"0x100000\", \"data\": \"0x70a082310000000000000000000000006c1f09f6271fbe133db38db9c9280307f5d22160\", \"to\": \"0x0d8775f648430679a709e98d2b0cb6250d2887ef\", \"value\": 500}");
             string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
             Assert.AreEqual(
-                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,\"message\":\"insufficient funds for transfer: address 0x0001020304050607080910111213141516171819\"},\"id\":67}",
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32015,\"message\":\"VM execution error.\",\"data\":\"insufficient sender balance\"},\"id\":67}",
                 serialized);
             ctx._test.ReadOnlyState.AccountExists(someAccount).Should().BeFalse();
         }
@@ -80,7 +81,7 @@ namespace Nethermind.JsonRpc.Test.Modules.Eth
                 "{\"from\":\"0x0001020304050607080910111213141516171819\",\"gasPrice\":\"0x100000\", \"data\": \"0x70a082310000000000000000000000006c1f09f6271fbe133db38db9c9280307f5d22160\", \"to\": \"0x0d8775f648430679a709e98d2b0cb6250d2887ef\"}");
             string serialized =
                 ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction), "0x0");
-            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"result\":\"0x\",\"id\":67}", serialized);
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32015,\"message\":\"VM execution error.\",\"data\":\"insufficient sender balance\"},\"id\":67}", serialized);
             ctx._test.ReadOnlyState.AccountExists(someAccount).Should().BeFalse();
         }
 
@@ -167,6 +168,9 @@ namespace Nethermind.JsonRpc.Test.Modules.Eth
             Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"result\":\"0x010203\",\"id\":67}", serialized);
         }
 
+        /// <summary>
+        /// 1. Before 1559: If you do not specify the gas price, 0 is used and you can call with accounts with 0 balance.
+        /// </summary>
         [Test]
         public async Task Eth_call_without_gas_pricing()
         {
@@ -177,12 +181,28 @@ namespace Nethermind.JsonRpc.Test.Modules.Eth
             Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"result\":\"0x\",\"id\":67}", serialized);
         }
 
+        /// <summary>
+        /// 2. Before 1559: If you specify the gas price, it is used and checked with the account balance.
+        /// </summary>
         [Test]
         public async Task Eth_call_with_gas_pricing()
         {
             using Context ctx = await Context.Create();
             TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
                 "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"gasPrice\": \"0x10\"}");
+            string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32015,\"message\":\"VM execution error.\",\"data\":\"insufficient sender balance\"},\"id\":67}", serialized);
+        }
+        
+        /// <summary>
+        /// 3. Before 1559: If you specify a gas price of type 1559, it will be ignored and the gas price will be 0.
+        /// </summary>
+        [Test]
+        public async Task Eth_call_with_1559_gas_pricing()
+        {
+            using Context ctx = await Context.Create();
+            TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
+                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"maxFeePerGas\": \"0x100\"}");
             string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
             Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"result\":\"0x\",\"id\":67}", serialized);
         }
@@ -192,24 +212,106 @@ namespace Nethermind.JsonRpc.Test.Modules.Eth
         {
             using Context ctx = await Context.CreateWithLondonEnabled();
             TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
-                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"gasPrice\": \"0x10\"}");
+                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\"}");
             string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
             Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"result\":\"0x\",\"id\":67}", serialized);
         }
 
+        /// <summary>
+        /// 4. After 1559: If you do not specify the gas price, 0 is used and you can call with accounts with 0 balance. The basefee will be 0.
+        /// </summary>
         [Test]
         public async Task Eth_call_without_gas_pricing_after_1559_new_type_of_transaction()
         {
             using Context ctx = await Context.CreateWithLondonEnabled();
             TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
-                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"type\": \"0x2\"}");
+                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\"}");
             string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
             Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"result\":\"0x\",\"id\":67}", serialized);
-            byte[] code = Prepare.EvmCode
-                .Op(Instruction.BASEFEE)
-                .PushData(0)
-                .Op(Instruction.SSTORE)
-                .Done;
+        }
+        
+        /// <summary>
+        /// 5. After 1559: In geth if you do specify a gas price, that is interpreted as both the max and priority fee
+        /// and your account balance is checked against them + the current base fee.
+        /// </summary>
+        /// TODO maybe needs to be changed to ``geth``
+        [Test]
+        public async Task Eth_call_with_gas_pricing_after_1559_new_type_of_transaction()
+        {
+            using Context ctx = await Context.CreateWithLondonEnabled();
+            TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32015,\"message\":\"VM execution error.\",\"data\":\"insufficient sender balance\"},\"id\":67}");
+            string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"result\":\"0x\",\"id\":67}", serialized);
+        }
+        
+        [Test]
+        public async Task Eth_call_with_gas_limit_after_1559_new_type_of_transaction()
+        {
+            using Context ctx = await Context.CreateWithLondonEnabled();
+            TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
+                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"gas\": \"0x1000\"}");
+            string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32015,\"message\":\"VM execution error.\",\"data\":\"gas limit below intrinsic gas\"},\"id\":67}", serialized);
+        }
+        
+        /// <summary>
+        /// 6. After 1559: If you specify a gas price of type 1559 and transaction type 0x2,
+        /// the transaction will be of type 1559 and your account balance is checked against them + the current basefee.
+        /// (maxFeePerGas)
+        /// </summary>
+        [Test]
+        public async Task Eth_call_with_max_fee_after_1559_new_type_of_transaction()
+        {
+            using Context ctx = await Context.CreateWithLondonEnabled(); 
+            TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
+                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"maxFeePerGas\": \"0x2DA2830C\", \"value\": \"0x2DA2830C\"}");
+            string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32015,\"message\":\"VM execution error.\",\"data\":\"insufficient sender balance\"},\"id\":67}", serialized);
+
+        }
+        
+        [Test]
+        public async Task Eth_call_with_max_fee_after_1559_new_type_of_transaction_success()
+        {
+            using Context ctx = await Context.CreateWithLondonEnabled();
+            await ctx._test.AddFundsAfterLondon((new Address("0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24"), 2.Ether()));
+            TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
+                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"maxPriorityFeePerGas\": \"0x2DA2830C\", \"maxFeePerGas\": \"0x2DA2830C\", \"value\": \"0x2DA2830C\"}");
+            string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
+            Assert.AreEqual(2.Ether(), ctx._test.ReadOnlyState.GetBalance(new Address("0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24")));
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"result\":\"0x\",\"id\":67}", serialized);
+            
+
+
+        }
+        
+        /// <summary>
+        /// 6. After 1559: If you specify a gas price of type 1559 and transaction type 0x2,
+        /// the transaction will be of type 1559 and your account balance is checked against them + the current basefee.
+        /// (maxFeePerGas)
+        /// </summary>
+        [Test]
+        public async Task Eth_call_with_max__priority_fee_after_1559_new_type_of_transaction()
+        {
+            using Context ctx = await Context.CreateWithLondonEnabled();
+            TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
+                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"maxPriorityFeePerGas\": \"0x2D\"}");
+            string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32015,\"message\":\"VM execution error.\",\"data\":\"max priority fee per gas higher than max fee per gas\"},\"id\":67}", serialized);
+        }
+
+        [Test]
+        public async Task Eth_call_with_dissimilar_account_nonce()
+        {
+            using Context ctx = await Context.CreateWithLondonEnabled();
+            Address someAccount = new Address("0x0d8775f648430679a709e98d2b0cb6250d2887ef");
+            ctx._test.ReadOnlyState.AccountExists(someAccount).Should().BeFalse();
+            TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
+                "{\"nonce\": \"105\", \"from\": \"0x0d8775f648430679a709e98d2b0cb6250d2887ef\", \"to\": \"0x0d8775f648430679a709e98d2b0cb6250d2887ef\"}");
+            string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32015,\"message\":\"VM execution error.\",\"data\":\"wrong transaction nonce\"},\"id\":67}", serialized);
+            ctx._test.ReadOnlyState.AccountExists(someAccount).Should().BeFalse();
         }
 
         [Test]
@@ -228,11 +330,31 @@ namespace Nethermind.JsonRpc.Test.Modules.Eth
 
             string dataStr = code.ToHexString();
             TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
-                $"{{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"type\": \"0x2\", \"data\": \"{dataStr}\"}}");
+                $"{{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"data\": \"{dataStr}\"}}");
             string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
             Assert.AreEqual(
                 "{\"jsonrpc\":\"2.0\",\"result\":\"0x000000000000000000000000000000000000000000000000000000002da282a8\",\"id\":67}",
                 serialized);
+        }
+        
+        [Test]
+        public async Task Eth_call_for_checking_invalid_input()
+        {
+            using Context ctx = await Context.CreateWithLondonEnabled();
+            TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
+                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"maxPriorityFeePerGas\": \"0x2DA2830C\", \"gasPrice\": \"0x2DA2830C\",}");
+            string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,\"message\":\"both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified\"},\"id\":67}", serialized);
+        }
+        
+        [Test]
+        public async Task Eth_call_for_checking_invalid_input_2()
+        {
+            using Context ctx = await Context.CreateWithLondonEnabled();
+            TransactionForRpc transaction = ctx._test.JsonSerializer.Deserialize<TransactionForRpc>(
+                "{\"from\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"to\": \"0x32e4e4c7c5d1cea5db5f9202a9e4d99e56c91a24\", \"maxFeePerGas\": \"0x2DA2830C\", \"gasPrice\": \"0x2DA2830C\"}");
+            string serialized = ctx._test.TestEthRpc("eth_call", ctx._test.JsonSerializer.Serialize(transaction));
+            Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,\"message\":\"both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified\"},\"id\":67}", serialized);
         }
     }
 }
