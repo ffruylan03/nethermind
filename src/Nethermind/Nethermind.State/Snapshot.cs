@@ -13,11 +13,29 @@
 // 
 //  You should have received a copy of the GNU Lesser General Public License
 //  along with the Nethermind. If not, see <http://www.gnu.org/licenses/>.
+// 
 
-namespace Nethermind.JsonRpc
+using System.Runtime.CompilerServices;
+
+[assembly:InternalsVisibleTo("Nethermind.Evm.Test")]
+namespace Nethermind.State
 {
-    public interface IJsonRpcRequest
+    /// <summary>
+    /// Stores state and storage snapshots (as the change index that we can revert to)
+    /// At the beginning and after each commit the snapshot is set to the value of EmptyPosition
+    /// </summary>
+    public readonly struct Snapshot
     {
-        void FromJson(string jsonValue);
+        public Snapshot(int stateSnapshot, int storageSnapshot)
+        {
+            StateSnapshot = stateSnapshot;
+            StorageSnapshot = storageSnapshot;
+        }
+        
+        public int StateSnapshot { get; }
+        
+        public int StorageSnapshot { get; }
+        
+        public const int EmptyPosition = -1;
     }
 }

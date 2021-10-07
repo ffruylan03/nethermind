@@ -150,7 +150,7 @@ namespace Nethermind.JsonRpc.Modules.Eth
 
                 return result.InputError
                     ? GetInputError(result)
-                    : ResultWrapper<UInt256?>.Fail(result.Error, ErrorCodes.InternalError);
+                    : ResultWrapper<UInt256?>.Fail(result.Error, ErrorCodes.ExecutionError);
             }
         }
         
@@ -175,7 +175,7 @@ namespace Nethermind.JsonRpc.Modules.Eth
 
                 return result.InputError
                     ? GetInputError(result)
-                    : ResultWrapper<AccessListForRpc>.Fail(result.Error, ErrorCodes.InternalError, new(GetResultAccessList(tx, result), GetResultGas(tx, result)));
+                    : ResultWrapper<AccessListForRpc>.Fail(result.Error, ErrorCodes.ExecutionError, new(GetResultAccessList(tx, result), GetResultGas(tx, result)));
             }
 
             private static AccessListItemForRpc[] GetResultAccessList(Transaction tx, BlockchainBridge.CallOutput result)
