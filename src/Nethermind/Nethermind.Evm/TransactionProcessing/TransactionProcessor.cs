@@ -85,8 +85,6 @@ namespace Nethermind.Evm.TransactionProcessing
             _stateProvider = worldState.StateProvider;
             _storageProvider = worldState.StorageProvider;
             _virtualMachine = virtualMachine ?? throw new ArgumentNullException(nameof(virtualMachine));
-            _stateProvider = stateProvider ?? throw new ArgumentNullException(nameof(stateProvider));
-            _storageProvider = storageProvider ?? throw new ArgumentNullException(nameof(storageProvider));
             _ecdsa = new EthereumEcdsa(specProvider.ChainId, logManager);
         }
 

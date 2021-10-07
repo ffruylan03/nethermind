@@ -143,7 +143,7 @@ namespace Nethermind.JsonRpc.Data
         {
             T tx = new()
             {
-                GasLimit = Gas ?? 90000,
+                GasLimit = Gas ?? 0,
                 GasPrice = GasPrice ?? 0,
                 Nonce = (ulong)(Nonce ?? 0), // here pick the last nonce?
                 To = To,

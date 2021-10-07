@@ -65,7 +65,17 @@ namespace Nethermind.JsonRpc.Modules.Trace
         {
             blockParameter ??= BlockParameter.Latest;
             
+            if (message.Gas == null || message.Gas == 0)
+            {
+                message.Gas = _jsonRpcConfig.GasCap ?? long.MaxValue;
+            }
+            else
+            {
+                message.Gas = Math.Min(_jsonRpcConfig.GasCap ?? long.MaxValue, message.Gas.Value);
+            }
+            
             Transaction tx = message.ToTransaction();
+            
             return TraceTx(tx, traceTypes, blockParameter);
         }
 
