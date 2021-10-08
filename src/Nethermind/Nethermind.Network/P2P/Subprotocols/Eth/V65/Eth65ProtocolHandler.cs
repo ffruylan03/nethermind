@@ -25,6 +25,7 @@ using Nethermind.Logging;
 using Nethermind.Network.P2P.Subprotocols.Eth.V64;
 using Nethermind.Network.Rlpx;
 using Nethermind.Stats;
+using Nethermind.Stats.Model;
 using Nethermind.Synchronization;
 using Nethermind.TxPool;
 
@@ -124,6 +125,12 @@ namespace Nethermind.Network.P2P.Subprotocols.Eth.V65
         
         public override void SendNewTransactions(IEnumerable<Transaction> txs)
         {
+            if (Node.ClientType == NodeClientType.OpenEthereum)
+            {
+                base.SendNewTransactions(txs);
+                return;
+            }
+            
             const int maxCapacity = 3200;
             List<Keccak> hashes = new(maxCapacity);
 

@@ -217,7 +217,7 @@ namespace Nethermind.Network.P2P
 
         public virtual void SendNewTransactions(IEnumerable<Transaction> txs)
         {
-            const int maxCapacity = 256;
+            const int maxCapacity = 64;
             List<Transaction> txsToSend = new(maxCapacity);
 
             foreach (Transaction tx in txs)
